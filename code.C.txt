@@ -1,0 +1,128 @@
+#include <LiquidCrystal.h>
+#include <SoftwareSerial.h>
+
+LiquidCrystal lcd(4, 5, 7, 6, 8, 9);
+//long l = 0;
+String temp = "";
+SoftwareSerial esp8266( 2, 3);
+SoftwareSerial communication( A4, A3);
+
+#define ok F("OK")
+#define pinstr F("pin=")
+#define err F("Error")
+#define CIPSEND F("AT+CIPSEND=4,")
+#define CWJAP  F("AT+CWJAP=\"viggy\",\"qwertyui\"\r\n")
+String data;
+String linkTogetsiteResponse = "";
+String linkTosendData = "";
+String lenghtOflinstr;
+const int no_of_senddata = 6;
+String iot_data[no_of_senddata];
+char buff[55], d[12], t[6], lon[10], lat[10], unit[7], cost[7];
+void setup()
+{
+  Serial.begin(9600);
+  communication.begin(9600);
+  esp8266.begin(9600);
+  lcd.begin(16, 2);
+  lcd.setCursor(0, 0);
+  lcd.print(F("IOT-ENERGY METER"));
+  delay(2000);
+  init_wifi();
+}
+
+void loop()
+{
+  int comp_hr = 0, comp_mn = 0;
+  while (1)
+  {
+    temp = "";
+    int o = 0;
+    communication.listen();
+    communication.flush();
+up:
+    communication.println('g');
+    while (!communication.available())
+    {
+      //        lcd.clear();
+      //        lcd.print(F("reqd"));
+      o++;
+      delay(50);
+      if (o > 2000)
+      {
+        goto up;
+      }
+    }
+    if (communication.available())
+    {
+      temp = "";
+      //        lcd.clear();
+      //        lcd.print(F("got"));
+      while (communication.available())
+      {
+        temp = communication.readString();
+        delay(10);
+      }
+      //        lcd.clear();
+      //        lcd.print(temp);
+      temp.toCharArray(buff, temp.length() + 1);
+      if (sscanf(buff, "%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],", unit, cost, d, t, lat, lon) == 6)
+      {
+        lcd.clear();
+        lcd.print(F("U="));
+        lcd.print((String)unit);
+        lcd.setCursor(9, 0);
+        lcd.print(F("D="));
+        lcd.print((String)d);
+
+        lcd.setCursor(0, 1);
+        lcd.print(F("C="));
+        lcd.print((String)cost);
+
+        lcd.setCursor(9, 1);
+        lcd.print(F("T="));
+        lcd.print((String)t);
+        // delay(2000);
+       iot_data[0] = (String)unit;
+        iot_data[1] = (String)cost;
+        iot_data[2] = (String)d;
+        iot_data[3] = (String)t;
+        iot_data[4] = (String)lat;
+        iot_data[5] = (String)lon;
+        int t_hr = (iot_data[3].substring(0, ':')).toInt();
+        int t_mn = (iot_data[3].substring(iot_data[3].indexOf(':') + 1)).toInt();
+        if ((comp_hr == 0 && comp_mn == 0) || (t_mn - comp_mn >= 5) || (0 != (t_hr - comp_hr))) //          if (count >= 25)
+        {
+          comp_hr = t_hr;
+          comp_mn = t_mn;
+          update_site();
+        }
+      }
+    }
+    else
+    {
+      lcd.clear();
+      lcd.print(F("Err"));
+    }
+    delay(2000);
+  }
+}
+
+
+
+
+void update_site()
+{
+  //  int unit = 0, cost  = 0;
+  esp8266.listen();
+  int c = 0;
+  while ( hit_link() == false)
+  {
+    c++;
+    if (c > 5)
+    { communication.listen();
+      communication.println('n');
+      break;
+    }
+  } delay(1000);
+}
